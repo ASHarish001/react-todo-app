@@ -67,7 +67,7 @@ function App() {
                   </IconButton>
                 }
               >
-                <ListItemText primary={task} />
+                <ListItemText primary={`${index + 1}. ${task}`} />
               </ListItem>
             ))) : (
               <Typography variant="body1" align="center" color="textSecondary">
