@@ -58,7 +58,7 @@ function App() {
             </Button>
           </Stack>
           <List>
-            {tasks.map((task, index) => (
+            {tasks.length > 0 ? (tasks.map((task, index) => (
               <ListItem
                 key={index}
                 secondaryAction={
@@ -69,7 +69,11 @@ function App() {
               >
                 <ListItemText primary={task} />
               </ListItem>
-            ))}
+            ))) : (
+              <Typography variant="body1" align="center" color="textSecondary">
+                No tasks added yet.
+              </Typography>
+            )}
           </List>
         </Container>
       </Container>  
