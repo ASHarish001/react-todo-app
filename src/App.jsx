@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { 
   TextField,
   Button, 
@@ -13,20 +13,60 @@ import {
 import DeleteIcon from '@mui/icons-material/Delete';
 import AddIcon from '@mui/icons-material/Add';
 
+import { collection, doc, addDoc, deleteDoc, getDocs } from 'firebase/firestore';
+import { db } from './firebase';
+
 function App() {
   const [tasks, setTasks] = useState([]);
   const [newTask, setNewTask] = useState('');
 
-  const addTask = () => {
-    if (newTask.trim() !== '') {
-      setTasks([...tasks, newTask]);
-      setNewTask('');
+  // Fetch tasks from Firestore
+  const fetchTodos = async () => {
+    try {
+      const snapshot = await getDocs(collection(db, 'tasks'));
+
+      const todos = snapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      }));
+
+      // setTasks(todos.map(todo => todo.text));
+      setTasks(todos);
+    } catch (error) {
+      console.error('Error fetching todos:', error);
     }
   };
-  
-  const deleteTask = (index) => {
-    const updatedTasks = tasks.filter((_, i) => i !== index);
-    setTasks(updatedTasks);
+
+  // Run when app loads
+  useEffect(() => {
+    fetchTodos();
+  }, []);
+
+  // Add task to Firestore
+  const addTodo = async () => {
+    if (newTask.trim() !== '') {
+      try {
+        await addDoc(collection(db, 'tasks'), {
+          text: newTask,
+          timestamp: new Date()
+        });
+
+        fetchTodos();
+        setTasks([...tasks, newTask]);
+        setNewTask('');
+      } catch (error) {
+        console.error('Error adding task:', error);
+      }
+    }
+  };
+
+  const deleteTodo = async (index) => {
+    try {
+      await deleteDoc(doc(db, 'tasks', tasks[index].id));
+      setTasks(tasks.filter((_, i) => i !== index));
+    } catch (error) {
+      console.error('Error deleting task:', error);
+    }
   };
 
   return (
@@ -35,6 +75,7 @@ function App() {
         <Typography variant="h4" align="center" gutterBottom>
           To-Do List
         </Typography>
+
         <Container maxWidth="sm" sx={{ mt: 4 }}>
           <Stack spacing={2} direction="row" alignItems="center">
             <TextField
@@ -44,41 +85,49 @@ function App() {
               value={newTask}
               onChange={e => setNewTask(e.target.value)}
               onKeyDown={e => {
-                if (e.key === 'Enter') addTask();
+                if (e.key === 'Enter') addTodo();
               }}
               sx={{ mb: 2 }}
             />
+
             <Button
               variant="contained"
               color="primary"
-              onClick={addTask}
+              onClick={addTodo}
               sx={{ mb: 2 }}
             >
               <AddIcon />
             </Button>
           </Stack>
+
           <List>
-            {tasks.length > 0 ? (tasks.map((task, index) => (
-              <ListItem
-                key={index}
-                secondaryAction={
-                  <IconButton edge="end" color="error" onClick={() => deleteTask(index)}>
-                    <DeleteIcon />
-                  </IconButton>
-                }
-              >
-                <ListItemText primary={`${index + 1}. ${task}`} />
-              </ListItem>
-            ))) : (
+            {tasks.length > 0 ? (
+              tasks.map((task, index) => (
+                <ListItem
+                  key={index}
+                  secondaryAction={
+                    <IconButton
+                      edge="end"
+                      color="error"
+                      onClick={() => deleteTodo(index)}
+                    >
+                      <DeleteIcon />
+                    </IconButton>
+                  }
+                >
+                  <ListItemText primary={`${index + 1}. ${task.text}`} />
+                </ListItem>
+              ))
+            ) : (
               <Typography variant="body1" align="center" color="textSecondary">
                 No tasks added yet.
               </Typography>
             )}
           </List>
         </Container>
-      </Container>  
+      </Container>
     </>
   );
 }
 
-export default App
+export default App;
