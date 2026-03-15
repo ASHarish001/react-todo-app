@@ -142,7 +142,7 @@ function TodoComp() {
     <>
       <Container maxWidth="sm" style={{ marginTop: '2rem' }}>
         <Typography variant="h4" align="center" gutterBottom>
-          {auth.currentUser ? `${auth.currentUser.email}'s Todo List` : 'Users Todo List'}
+          {auth.currentUser ? `${auth.currentUser.email.split('@')[0]}'s Todo List` : 'Users Todo List'}
         </Typography>
 
         <Button onClick={logout} variant="outlined" sx={{ mb: 2 }}>
