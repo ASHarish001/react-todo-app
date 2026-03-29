@@ -1,145 +1,127 @@
-// import { useState, useEffect } from 'react'
-// import { 
-//   TextField,
-//   Button, 
-//   List, 
-//   ListItem, 
-//   ListItemText, 
-//   IconButton,
-//   Container,
-//   Typography,
-//   Stack
-// } from '@mui/material';
-// import DeleteIcon from '@mui/icons-material/Delete';
-// import AddIcon from '@mui/icons-material/Add';
-
-// function App() {
-//   const [tasks, setTasks] = useState([]);
-//   const [newTask, setNewTask] = useState('');
-
-//   // Fetch tasks from Firestore
-//   const fetchTodos = async () => {
-//     try {
-//       const snapshot = await getDocs(collection(db, 'tasks'));
-
-//       const todos = snapshot.docs.map(doc => ({
-//         id: doc.id,
-//         ...doc.data()
-//       }));
-
-//       // setTasks(todos.map(todo => todo.text));
-//       setTasks(todos);
-//     } catch (error) {
-//       console.error('Error fetching todos:', error);
-//     }
-//   };
-
-//   // Run when app loads
-//   useEffect(() => {
-//     fetchTodos();
-//   }, []);
-
-//   // Add task to Firestore
-//   const addTodo = async () => {
-//     if (newTask.trim() !== '') {
-//       try {
-//         await addDoc(collection(db, 'tasks'), {
-//           text: newTask,
-//           timestamp: new Date()
-//         });
-
-//         fetchTodos();
-//         setTasks([...tasks, newTask]);
-//         setNewTask('');
-//       } catch (error) {
-//         console.error('Error adding task:', error);
-//       }
-//     }
-//   };
-
-//   const deleteTodo = async (index) => {
-//     try {
-//       await deleteDoc(doc(db, 'tasks', tasks[index].id));
-//       setTasks(tasks.filter((_, i) => i !== index));
-//     } catch (error) {
-//       console.error('Error deleting task:', error);
-//     }
-//   };
-
-//   return (
-//     <>
-//       <Container maxWidth="sm" style={{ marginTop: '2rem' }}>
-//         <Typography variant="h4" align="center" gutterBottom>
-//           Task Reminder
-//         </Typography>
-
-//         <Container maxWidth="sm" sx={{ mt: 4 }}>
-//           <Stack spacing={2} direction="row" alignItems="center">
-//             <TextField
-//               label="Add Task"
-//               variant="outlined"
-//               fullWidth
-//               value={newTask}
-//               onChange={e => setNewTask(e.target.value)}
-//               onKeyDown={e => {
-//                 if (e.key === 'Enter') addTodo();
-//               }}
-//               sx={{ mb: 2 }}
-//             />
-
-//             <Button
-//               variant="contained"
-//               color="primary"
-//               onClick={addTodo}
-//               sx={{ mb: 2 }}
-//             >
-//               <AddIcon />
-//             </Button>
-//           </Stack>
-
-//           <List>
-//             {tasks.length > 0 ? (
-//               tasks.map((task, index) => (
-//                 <ListItem
-//                   key={index}
-//                   secondaryAction={
-//                     <IconButton
-//                       edge="end"
-//                       color="error"
-//                       onClick={() => deleteTodo(index)}
-//                     >
-//                       <DeleteIcon />
-//                     </IconButton>
-//                   }
-//                 >
-//                   <ListItemText primary={`${index + 1}. ${task.text}`} />
-//                 </ListItem>
-//               ))
-//             ) : (
-//               <Typography variant="body1" align="center" color="textSecondary">
-//                 No tasks added yet.
-//               </Typography>
-//             )}
-//           </List>
-//         </Container>
-//       </Container>
-//     </>
-//   );
-// }
-
-// export default App;
-
+import { useEffect, useMemo, useState } from "react";
+import {
+  ThemeProvider,
+  createTheme,
+  CssBaseline,
+  Box,
+  Container
+} from "@mui/material";
 import { useAuth } from "./context/AuthContext";
-import GoogleLogin from "./comps/GoogleLogin";
+import { db } from "./services/firebase";
+import { doc, getDoc, serverTimestamp, setDoc } from "firebase/firestore";
+import LoginPage from "./comps/LoginPage";
 import TodoComp from "./comps/TodoComp";
 
 function App() {
   const { user } = useAuth();
+  const [mode, setMode] = useState(() => {
+    const storedMode = localStorage.getItem("themeMode");
+    return storedMode === "dark" ? "dark" : "light";
+  });
+
+  useEffect(() => {
+    localStorage.setItem("themeMode", mode);
+  }, [mode]);
+
+  useEffect(() => {
+    if (!user?.uid) return;
+
+    let isMounted = true;
+
+    const syncThemeFromDb = async () => {
+      try {
+        const userRef = doc(db, "users", user.uid);
+        const userSnap = await getDoc(userRef);
+        const dbMode = userSnap.data()?.themeMode;
+
+        if ((dbMode === "light" || dbMode === "dark") && isMounted) {
+          setMode(dbMode);
+          localStorage.setItem("themeMode", dbMode);
+          return;
+        }
+
+        await setDoc(
+          userRef,
+          {
+            themeMode: localStorage.getItem("themeMode") || "light",
+            themeUpdatedAt: serverTimestamp()
+          },
+          { merge: true }
+        );
+      } catch (error) {
+        console.error("Failed to sync theme from DB:", error);
+      }
+    };
+
+    syncThemeFromDb();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [user?.uid]);
+
+  const toggleMode = () => {
+    const nextMode = mode === "light" ? "dark" : "light";
+    setMode(nextMode);
+    localStorage.setItem("themeMode", nextMode);
+
+    if (user?.uid) {
+      void setDoc(
+        doc(db, "users", user.uid),
+        {
+          themeMode: nextMode,
+          themeUpdatedAt: serverTimestamp()
+        },
+        { merge: true }
+      );
+    }
+  };
+
+  const theme = useMemo(
+    () =>
+      createTheme({
+        palette: {
+          mode,
+          primary: { main: "#4285F4" },
+          secondary: { main: "#34A853" },
+          error: { main: "#EA4335" },
+          warning: { main: "#FBBC04" },
+          background: {
+            default: mode === "light" ? "#F8F9FA" : "#101521",
+            paper: mode === "light" ? "#FFFFFF" : "#1B2333"
+          }
+        },
+        typography: {
+          fontFamily: "'Roboto', sans-serif",
+          h3: { fontWeight: 700, letterSpacing: "-0.01em" },
+          h4: { fontWeight: 700, letterSpacing: "-0.01em" },
+          h5: { fontWeight: 600 },
+          h6: { fontWeight: 600 },
+          body1: { fontWeight: 400 },
+          body2: { fontWeight: 400 }
+        },
+        shape: { borderRadius: 8 }
+      }),
+    [mode]
+  );
 
   return (
-    <div>
-      {user ? <TodoComp /> : <GoogleLogin />}
-    </div>
+    <ThemeProvider theme={theme}>
+      <CssBaseline />
+      <Box
+        sx={{
+          minHeight: "100vh",
+          backgroundImage:
+            mode === "light"
+              ? "radial-gradient(1200px 600px at 10% -10%, #E8F0FE 10%, transparent 60%), radial-gradient(900px 500px at 110% 10%, #E6F4EA 10%, transparent 60%), linear-gradient(180deg, #F8F9FA 0%, #F1F3F4 100%)"
+              : "radial-gradient(1200px 600px at 10% -10%, #1B2A49 10%, transparent 60%), radial-gradient(900px 500px at 110% 10%, #173627 10%, transparent 60%), linear-gradient(180deg, #101521 0%, #0C111B 100%)"
+        }}
+      >
+        <Container maxWidth="md" sx={{ py: { xs: 3, md: 6 } }}>
+          {user ? <TodoComp mode={mode} onToggleMode={toggleMode} /> : <LoginPage />}
+        </Container>
+      </Box>
+    </ThemeProvider>
   );
 }
 
